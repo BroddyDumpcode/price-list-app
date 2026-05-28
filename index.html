@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warung App</title>
+
+<style>
+body{
+  font-family:Arial;
+  background:#f4f4f4;
+  padding:20px;
+}
+
+.container{
+  max-width:900px;
+  margin:auto;
+}
+
+.card{
+  background:white;
+  padding:20px;
+  border-radius:12px;
+  margin-bottom:20px;
+}
+
+input{
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  margin-bottom:15px;
+  border:1px solid #ccc;
+  border-radius:8px;
+}
+
+button{
+  padding:10px 16px;
+  border:none;
+  cursor:pointer;
+  border-radius:8px;
+}
+
+.login-btn{
+  background:#2563eb;
+  color:white;
+}
+
+.add-btn{
+  background:#16a34a;
+  color:white;
+}
+
+.delete-btn{
+  background:red;
+  color:white;
+}
+
+.edit-btn{
+  background:orange;
+  color:white;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  padding:12px;
+  border-bottom:1px solid #ddd;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="card" id="loginBox">
+  <h2>Login Admin</h2>
+
+  <input type="text" id="username" placeholder="Username">
+  <input type="password" id="password" placeholder="Password">
+
+  <button class="login-btn" onclick="login()">
+    Login
+  </button>
+</div>
+
+<div class="card" id="appBox" style="display:none;">
+
+  <h2>Data Barang Warung</h2>
+
+  <input type="text" id="name" placeholder="Nama Produk">
+  <input type="text" id="price" placeholder="Harga">
+
+  <button class="add-btn" onclick="saveProduct()">
+    Simpan Produk
+  </button>
+
+  <button onclick="printData()" style="background:#111827;color:white;margin-left:10px;">
+    Print Data
+  </button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Nama</th>
+        <th>Harga</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+
+    <tbody id="productTable"></tbody>
+  </table>
+
+</div>
+
+</div>
+
+<script>
+const API = "http://localhost:3000";
+
+let token = localStorage.getItem("token");
+let editId = null;
+
+const priceInput = document.getElementById("price");
+
+priceInput.addEventListener("input", function(e){
+  let value = e.target.value.replace(/\D/g, "");
+
+  if(value){
+    value = Number(value).toLocaleString("id-ID");
+  }
+
+  e.target.value = value;
+});
+
+if(token){
+  showApp();
+}
+
+async function login(){
+
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+
+  const req = await fetch(API + "/login", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      username,
+      password
+    })
+  });
+
+  const res = await req.json();
+
+  if(res.token){
+    localStorage.setItem("token", res.token);
+    token = res.token;
+
+    showApp();
+  } else {
+    alert(res.message);
+  }
+}
+
+function showApp(){
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("appBox").style.display = "block";
+
+  getProducts();
+}
+
+async function getProducts(){
+
+  const req = await fetch(API + "/products", {
+    headers:{
+      authorization: token
+    }
+  });
+
+  const products = await req.json();
+
+  let html = "";
+
+  products.forEach((item) => {
+
+    html += `
+      <tr>
+        <td>${item.name}</td>
+        <td>Rp ${Number(item.price).toLocaleString("id-ID")}</td>
+
+        <td>
+          <button class="edit-btn"
+            onclick="editProduct(${item.id}, '${item.name}', ${item.price})">
+            Edit
+          </button>
+
+          <button class="delete-btn"
+            onclick="deleteProduct(${item.id})">
+            Hapus
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  document.getElementById("productTable").innerHTML = html;
+}
+
+async function saveProduct(){
+
+  const name = document.getElementById("name").value;
+
+  const price = document
+    .getElementById("price")
+    .value
+    .replace(/\./g, "");
+
+  if(editId){
+
+    await fetch(API + "/products/" + editId, {
+      method:"PUT",
+      headers:{
+        "Content-Type":"application/json",
+        authorization: token
+      },
+      body:JSON.stringify({
+        name,
+        price
+      })
+    });
+
+    editId = null;
+
+  } else {
+
+    await fetch(API + "/products", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        authorization: token
+      },
+      body:JSON.stringify({
+        name,
+        price
+      })
+    });
+  }
+
+  document.getElementById("name").value = "";
+  document.getElementById("price").value = "";
+
+  getProducts();
+}
+
+function editProduct(id, name, price){
+
+  editId = id;
+
+  document.getElementById("name").value = name;
+
+  document.getElementById("price").value =
+    Number(price).toLocaleString("id-ID");
+}
+
+async function deleteProduct(id){
+
+  if(confirm("Yakin hapus produk?")){
+
+    await fetch(API + "/products/" + id, {
+      method:"DELETE",
+      headers:{
+        authorization: token
+      }
+    });
+
+    getProducts();
+  }
+}
+
+function printData(){
+  const content = document.getElementById("appBox").innerHTML;
+
+  const printWindow = window.open("", "", "width=900,height=700");
+
+  printWindow.document.write(`
+    <html>
+    <head>
+      <title>Print Data Barang</title>
+
+      <style>
+        body{
+          font-family:Arial;
+          padding:20px;
+        }
+
+        table{
+          width:100%;
+          border-collapse:collapse;
+          margin-top:20px;
+        }
+
+        th, td{
+          border:1px solid #ccc;
+          padding:12px;
+          text-align:left;
+        }
+
+        th{
+          background:#f4f4f4;
+        }
+
+        button{
+          display:none;
+        }
+
+        input{
+          display:none;
+        }
+      </style>
+    </head>
+
+    <body>
+      <h2>Data Barang Warung</h2>
+      ${content}
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  printWindow.print();
+}
+</script>
+
+</body>
+</html>
